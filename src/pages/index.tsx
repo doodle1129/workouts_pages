@@ -1,34 +1,92 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import { Helmet } from 'react-helmet-async';
 import Layout from '@/components/Layout';
 import LocationStat from '@/components/LocationStat';
 import RunMap from '@/components/RunMap';
 import RunTable from '@/components/RunTable';
 import SVGStat from '@/components/SVGStat';
+import WeeklyStat from '@/components/WeeklyStat';
 import YearsStat from '@/components/YearsStat';
 import useActivities from '@/hooks/useActivities';
-import useSiteMetadata from '@/hooks/useSiteMetadata';
+import getSiteMetadata from '@/hooks/useSiteMetadata';
 import { useInterval } from '@/hooks/useInterval';
 import { IS_CHINESE } from '@/utils/const';
 import {
   Activity,
-  IViewState,
   filterAndSortRuns,
   filterCityRuns,
   filterTitleRuns,
   filterTypeRuns,
   filterYearRuns,
-  geoJsonForRuns,
-  getBoundsForGeoData,
   scrollToMap,
   sortDateFunc,
   titleForShow,
   RunIds,
 } from '@/utils/utils';
+import {
+  geoJsonForRuns,
+  getBoundsForGeoData,
+  type IViewState,
+} from '@/utils/geoUtils';
+import { useTheme, useThemeChangeCounter } from '@/hooks/useTheme';
+
+const HASH_RUN_CHANGE_EVENT = 'running-page-hash-run-change';
+
+const getRunIdFromHash = () => {
+  if (typeof window === 'undefined') return null;
+  const hash = window.location.hash.replace('#', '');
+  if (!hash.startsWith('run_')) return null;
+  const runId = parseInt(hash.replace('run_', ''), 10);
+  return Number.isNaN(runId) ? null : runId;
+};
+
+const subscribeToRunHash = (onStoreChange: () => void) => {
+  window.addEventListener('hashchange', onStoreChange);
+  window.addEventListener(HASH_RUN_CHANGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener('hashchange', onStoreChange);
+    window.removeEventListener(HASH_RUN_CHANGE_EVENT, onStoreChange);
+  };
+};
+
+const notifyRunHashChange = () => {
+  window.dispatchEvent(new Event(HASH_RUN_CHANGE_EVENT));
+};
+
+const clearRunHash = () => {
+  if (window.location.hash) {
+    window.history.pushState(
+      null,
+      '',
+      `${window.location.pathname}${window.location.search}`
+    );
+    notifyRunHashChange();
+  }
+};
+
+const setRunHash = (runId: number) => {
+  const newHash = `#run_${runId}`;
+  if (window.location.hash !== newHash) {
+    window.history.pushState(null, '', newHash);
+    notifyRunHashChange();
+  }
+};
+
+const useRunHashId = () =>
+  useSyncExternalStore(subscribeToRunHash, getRunIdFromHash, () => null);
 
 const Index = () => {
-  const { siteTitle } = useSiteMetadata();
+  const { siteTitle, siteUrl } = getSiteMetadata();
   const { activities, thisYear } = useActivities();
+  const themeChangeCounter = useThemeChangeCounter();
   const [year, setYear] = useState(thisYear);
   const [runIndex, setRunIndex] = useState(-1);
   const [title, setTitle] = useState('');
@@ -43,42 +101,14 @@ const Index = () => {
     func2: ((_run: Activity, _value: string) => boolean) | null;
   }>({ item: thisYear, func: filterYearRuns, item2: null, func2: null });
 
-  // State to track if we're showing a single run from URL hash
-  const [singleRunId, setSingleRunId] = useState<number | null>(null);
+  // Track if we're showing a single run from URL hash
+  const singleRunId = useRunHashId();
 
   // Animation trigger for single runs - increment this to force animation replay
   const [animationTrigger, setAnimationTrigger] = useState(0);
 
-  // Parse URL hash on mount to check for run ID
-  useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
-    if (hash && hash.startsWith('run_')) {
-      const runId = parseInt(hash.replace('run_', ''), 10);
-      if (!isNaN(runId)) {
-        setSingleRunId(runId);
-      }
-    }
-
-    // Listen for hash changes (browser back/forward buttons)
-    const handleHashChange = () => {
-      const newHash = window.location.hash.replace('#', '');
-      if (newHash && newHash.startsWith('run_')) {
-        const runId = parseInt(newHash.replace('run_', ''), 10);
-        if (!isNaN(runId)) {
-          setSingleRunId(runId);
-        }
-      } else {
-        // Hash was cleared, reset to normal view
-        setSingleRunId(null);
-      }
-    };
-
-    window.addEventListener('hashchange', handleHashChange);
-
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-    };
-  }, []);
+  const selectedRunIdRef = useRef<number | null>(null);
+  const selectedRunDateRef = useRef<string | null>(null);
 
   // Memoize expensive calculations
   const runs = useMemo(() => {
@@ -99,8 +129,9 @@ const Index = () => {
   ]);
 
   const geoData = useMemo(() => {
+    void themeChangeCounter;
     return geoJsonForRuns(runs);
-  }, [runs]);
+  }, [runs, themeChangeCounter]);
 
   // for auto zoom
   const bounds = useMemo(() => {
@@ -169,10 +200,7 @@ const Index = () => {
       setRunIndex(-1);
       setTitle(`${item} ${name} Heatmap`);
       // Reset single run state when changing filters
-      setSingleRunId(null);
-      if (window.location.hash) {
-        window.history.pushState(null, '', window.location.pathname);
-      }
+      clearRunHash();
     },
     [thisYear]
   );
@@ -196,10 +224,7 @@ const Index = () => {
       setRunIndex(-1);
       setTitle(`${year} ${type} Type Heatmap`);
       // Reset single run state when changing filters
-      setSingleRunId(null);
-      if (window.location.hash) {
-        window.history.pushState(null, '', window.location.pathname);
-      }
+      clearRunHash();
     },
     [thisYear]
   );
@@ -229,7 +254,6 @@ const Index = () => {
     [changeByItem]
   );
 
-  // eslint-disable-next-line no-unused-vars
   const changeTitle = useCallback(
     (title: string) => {
       changeByItem(title, 'Title', filterTitleRuns);
@@ -257,13 +281,13 @@ const Index = () => {
 
       const selectedRuns = !runIds.length
         ? runs
-        : runs.filter((r: any) => ids.has(r.run_id));
+        : runs.filter((run: Activity) => ids.has(run.run_id));
 
       if (!selectedRuns.length) {
         return;
       }
 
-      const lastRun = selectedRuns.sort(sortDateFunc)[0];
+      const lastRun = selectedRuns.slice().sort(sortDateFunc)[0];
 
       if (!lastRun) {
         return;
@@ -281,17 +305,10 @@ const Index = () => {
       // Update URL hash when a single run is located
       if (runIds.length === 1) {
         const runId = runIds[0];
-        const newHash = `#run_${runId}`;
-        if (window.location.hash !== newHash) {
-          window.history.pushState(null, '', newHash);
-        }
-        setSingleRunId(runId);
+        setRunHash(runId);
       } else {
         // If multiple runs or no runs, clear the hash and single run state
-        if (window.location.hash) {
-          window.history.pushState(null, '', window.location.pathname);
-        }
-        setSingleRunId(null);
+        clearRunHash();
       }
 
       // Create geoData for selected runs and calculate new bounds
@@ -320,34 +337,62 @@ const Index = () => {
   );
 
   // Auto locate activity when singleRunId is set and activities are loaded
+  // First, detect the run's year and switch to it if needed
   useEffect(() => {
     if (singleRunId !== null && activities.length > 0) {
-      // Check if the run exists in our activities
-      const runExists = activities.some((run) => run.run_id === singleRunId);
-      if (runExists) {
-        // Automatically simulate clicking the single run
-        locateActivity([singleRunId]);
-      } else {
-        // If run doesn't exist, clear the hash and show a warning
-        console.warn(`Run with ID ${singleRunId} not found in activities`);
-        window.history.replaceState(null, '', window.location.pathname);
-        setSingleRunId(null);
-      }
+      const frameId = requestAnimationFrame(() => {
+        const targetRun = activities.find((run) => run.run_id === singleRunId);
+        if (targetRun) {
+          const runYear = targetRun.start_date_local.slice(0, 4);
+          if (year !== runYear) {
+            setYear(runYear);
+            setCurrentFilter({ item: runYear, func: filterYearRuns });
+          }
+        } else {
+          // If run doesn't exist, clear the hash and show a warning
+          console.warn(`Run with ID ${singleRunId} not found in activities`);
+          window.history.replaceState(null, '', window.location.pathname);
+          notifyRunHashChange();
+        }
+      });
+      return () => cancelAnimationFrame(frameId);
     }
-  }, [singleRunId, activities, locateActivity]);
+  }, [singleRunId, activities, year]);
+
+  useEffect(() => {
+    if (singleRunId !== null && runs.length > 0) {
+      const frameId = requestAnimationFrame(() => {
+        const runExistsInCurrentRuns = runs.some(
+          (run) => run.run_id === singleRunId
+        );
+        if (runExistsInCurrentRuns) {
+          locateActivity([singleRunId]);
+        }
+      });
+      return () => cancelAnimationFrame(frameId);
+    }
+  }, [runs, singleRunId, locateActivity]);
 
   // Update bounds when geoData changes
   useEffect(() => {
-    setViewState((prev) => ({
-      ...prev,
-      ...bounds,
-    }));
-  }, [bounds]);
+    if (singleRunId === null) {
+      const frameId = requestAnimationFrame(() => {
+        setViewState((prev) => ({
+          ...prev,
+          ...bounds,
+        }));
+      });
+      return () => cancelAnimationFrame(frameId);
+    }
+  }, [bounds, singleRunId]);
 
   // Animate geoData when runs change
   useEffect(() => {
-    startAnimation(runs);
-  }, [runs, startAnimation]);
+    if (singleRunId === null) {
+      const frameId = requestAnimationFrame(() => startAnimation(runs));
+      return () => cancelAnimationFrame(frameId);
+    }
+  }, [runs, startAnimation, singleRunId]);
 
   useEffect(() => {
     if (year !== 'Total') {
@@ -370,7 +415,13 @@ const Index = () => {
           if (!runId) {
             return;
           }
-          locateActivity([runId]);
+          if (selectedRunIdRef.current === runId) {
+            selectedRunIdRef.current = null;
+            locateActivity(runs.map((r) => r.run_id));
+          } else {
+            selectedRunIdRef.current = runId;
+            locateActivity([runId]);
+          }
           return;
         }
 
@@ -386,7 +437,13 @@ const Index = () => {
           if (!runIDsOnDate.length) {
             return;
           }
-          locateActivity(runIDsOnDate);
+          if (selectedRunDateRef.current === runDate) {
+            selectedRunDateRef.current = null;
+            locateActivity(runs.map((r) => r.run_id));
+          } else {
+            selectedRunDateRef.current = runDate;
+            locateActivity(runIDsOnDate);
+          }
         }
       }
     };
@@ -394,13 +451,18 @@ const Index = () => {
     return () => {
       svgStat && svgStat.removeEventListener('click', handleClick);
     };
-  }, [year]);
+  }, [year, locateActivity, runs, thisYear]);
+
+  const { theme } = useTheme();
 
   return (
     <Layout>
+      <Helmet>
+        <html lang="en" data-theme={theme} />
+      </Helmet>
       <div className="w-full lg:w-1/4">
         <h1 className="my-12 mt-6 text-5xl font-extrabold italic">
-          <a href="/">{siteTitle}</a>
+          <a href={siteUrl}>{siteTitle}</a>
         </h1>
         {(viewState.zoom ?? 0) <= 3 && IS_CHINESE ? (
           <LocationStat
@@ -417,7 +479,7 @@ const Index = () => {
           />
         )}
       </div>
-      <div className="w-full lg:w-2/3" id="map-container">
+      <div className="w-full lg:w-3/4" id="map-container">
         <RunMap
           title={title}
           viewState={viewState}
@@ -427,13 +489,13 @@ const Index = () => {
           thisYear={year}
           animationTrigger={animationTrigger}
         />
+        <WeeklyStat runs={runs} />
         {year === 'Total' ? (
           <SVGStat />
         ) : (
           <RunTable
             runs={runs}
             locateActivity={locateActivity}
-            setActivity={setActivity}
             runIndex={runIndex}
             setRunIndex={setRunIndex}
           />

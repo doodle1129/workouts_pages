@@ -27,9 +27,6 @@ const MAP_LAYER_LIST = [
   'country-label',
 ];
 
-const USE_GOOGLE_ANALYTICS = false;
-const GOOGLE_ANALYTICS_TRACKING_ID = '';
-
 // styling: set to `true` if you want dash-line route
 const USE_DASH_LINE = false;
 // styling: route line opacity: [0, 1]
@@ -80,6 +77,7 @@ const ROWING_TITLE = IS_CHINESE ? '划船' : 'Rowing';
 const KAYAKING_TITLE = IS_CHINESE ? '皮划艇' : 'Kayaking';
 const SNOWBOARD_TITLE = IS_CHINESE ? '单板滑雪' : 'Snowboard';
 const SKI_TITLE = IS_CHINESE ? '双板滑雪' : 'Ski';
+const BACKCOUNTRY_SKI_TITLE = IS_CHINESE ? '野外滑雪' : 'BackcountrySki';
 const ROAD_TRIP_TITLE = IS_CHINESE ? '自驾' : 'RoadTrip';
 const FLIGHT_TITLE = IS_CHINESE ? '飞行' : 'Flight';
 const RUN_TREADMILL_TITLE = IS_CHINESE ? '跑步机' : 'Treadmill Run';
@@ -90,6 +88,7 @@ const MAX_SPEED_TITLE = IS_CHINESE ? '最快速度' : 'Max Speed';
 const TOTAL_TIME_TITLE = IS_CHINESE ? '总时间' : 'Total Time';
 const AVERAGE_SPEED_TITLE = IS_CHINESE ? '平均速度' : 'Average Speed';
 const TOTAL_DISTANCE_TITLE = IS_CHINESE ? '总距离' : 'Total Distance';
+const AVERAGE_DISTANCE_TITLE = IS_CHINESE ? '平均距离' : 'Average Distance';
 const TOTAL_ELEVATION_GAIN_TITLE = IS_CHINESE
   ? '总海拔爬升'
   : 'Total Elevation Gain';
@@ -100,6 +99,10 @@ const WEEKLY_TITLE = IS_CHINESE ? 'Week' : 'Weekly';
 const DAILY_TITLE = IS_CHINESE ? 'Day' : 'Daily';
 const LOCATION_TITLE = IS_CHINESE ? 'Location' : 'Location';
 const HOME_PAGE_TITLE = IS_CHINESE ? '首页' : 'Home';
+
+const LOADING_TEXT = IS_CHINESE ? '加载中...' : 'Loading...';
+const NO_ROUTE_DATA = IS_CHINESE ? '暂无路线数据' : 'No route data';
+const INVALID_ROUTE_DATA = IS_CHINESE ? '路线数据无效' : 'Invalid route data';
 
 const RUN_TITLES = {
   FULL_MARATHON_RUN_TITLE,
@@ -116,6 +119,7 @@ const RUN_TITLES = {
   KAYAKING_TITLE,
   SNOWBOARD_TITLE,
   SKI_TITLE,
+  BACKCOUNTRY_SKI_TITLE,
   ROAD_TRIP_TITLE,
   FLIGHT_TITLE,
   RUN_TREADMILL_TITLE,
@@ -147,6 +151,7 @@ const ACTIVITY_TOTAL = {
   TOTAL_TIME_TITLE,
   AVERAGE_SPEED_TITLE,
   TOTAL_DISTANCE_TITLE,
+  AVERAGE_DISTANCE_TITLE,
   TOTAL_ELEVATION_GAIN_TITLE,
   AVERAGE_HEART_RATE_TITLE,
   YEARLY_TITLE,
@@ -157,8 +162,6 @@ const ACTIVITY_TOTAL = {
 };
 
 export {
-  USE_GOOGLE_ANALYTICS,
-  GOOGLE_ANALYTICS_TRACKING_ID,
   CHINESE_LOCATION_INFO_MESSAGE_FIRST,
   CHINESE_LOCATION_INFO_MESSAGE_SECOND,
   MAPBOX_TOKEN,
@@ -179,11 +182,14 @@ export {
   ACTIVITY_TOTAL,
   TYPES_MAPPING,
   HOME_PAGE_TITLE,
+  LOADING_TEXT,
+  NO_ROUTE_DATA,
+  INVALID_ROUTE_DATA,
 };
 
-// eslint-disable-next-line no-unused-vars
 const nike = 'rgb(224,237,94)'; // if you want to change the main color, modify this value in src/styles/variables.scss
 const yellow = 'rgb(224,237,94)';
+const yellow_compl = 'rgb(106, 94, 237)';
 const green = 'rgb(0,237,94)';
 const pink = 'rgb(237,85,219)';
 const cyan = 'rgb(112,243,255)';
@@ -191,6 +197,7 @@ const IKB = 'rgb(0,47,167)';
 const dark_vanilla = 'rgb(228,212,220)';
 const gold = 'rgb(242,190,69)';
 const purple = 'rgb(154,118,252)';
+const purple2 = 'rgb(127, 34, 254)';
 const veryPeri = 'rgb(105,106,173)'; //长春花蓝
 const red = 'rgb(255,0,0)'; //大红色
 
@@ -198,26 +205,57 @@ const red = 'rgb(255,0,0)'; //大红色
 // issues #92 and #198
 export const NEED_FIX_MAP = false;
 export const MAIN_COLOR = green;
-export const RUN_COLOR = yellow;
-export const RIDE_COLOR = green;
-export const VIRTUAL_RIDE_COLOR = veryPeri;
-export const HIKE_COLOR = pink;
-export const SWIM_COLOR = gold;
-export const ROWING_COLOR = cyan;
-export const ROAD_TRIP_COLOR = purple;
-export const FLIGHT_COLOR = dark_vanilla;
+export const MAIN_COLOR_LIGHT = purple2;
+
+// Static color constants
+export const RUN_COLOR_LIGHT = '#47b8e0';
+export const RUN_COLOR_DARK = MAIN_COLOR;
+
+// Single run animation colors
+export const SINGLE_RUN_COLOR_LIGHT = '#52c41a'; // Green for light theme
+export const SINGLE_RUN_COLOR_DARK = '#ff4d4f'; // Red for dark theme
+
+// Helper function to get theme-aware SINGLE_RUN_COLOR
+export const getRuntimeSingleColor = (
+  typeColor: string[] = [MAIN_COLOR, MAIN_COLOR_LIGHT]
+): string => {
+  if (typeof window === 'undefined') return SINGLE_RUN_COLOR_DARK;
+
+  const dataTheme = document.documentElement.getAttribute('data-theme');
+  const savedTheme = localStorage.getItem('theme');
+
+  // Determine current theme (default to dark)
+  const isDark =
+    dataTheme === 'dark' ||
+    (!dataTheme && savedTheme === 'dark') ||
+    (!dataTheme && !savedTheme);
+
+  return isDark ? typeColor[0] : typeColor[1];
+};
+
+// Legacy export for backwards compatibility
+export const RUN_COLOR = [yellow, yellow_compl];
+export const RIDE_COLOR = [green, green];
+export const VIRTUAL_RIDE_COLOR = [veryPeri, veryPeri];
+export const HIKE_COLOR = [pink, pink];
+export const SWIM_COLOR = [gold, gold];
+export const ROWING_COLOR = [cyan, cyan];
+export const ROAD_TRIP_COLOR = [purple, purple];
+export const FLIGHT_COLOR = [dark_vanilla, dark_vanilla];
+export const KAYAKING_COLOR = [red, red];
+export const SNOWBOARD_COLOR = [dark_vanilla, dark_vanilla];
+export const TRAIL_RUN_COLOR = [IKB, IKB];
 export const PROVINCE_FILL_COLOR = '#47b8e0';
 export const COUNTRY_FILL_COLOR = dark_vanilla;
-export const KAYAKING_COLOR = red;
-export const SNOWBOARD_COLOR = dark_vanilla;
-export const TRAIL_RUN_COLOR = IKB;
+export const INDOOR_COLOR = '#8899aa';
 
 // map tiles vendor, maptiler or mapbox or stadiamaps
 // if you want to use maptiler, set the access token in MAP_TILE_ACCESS_TOKEN
-export const MAP_TILE_VENDOR = 'mapbox';
+export const MAP_TILE_VENDOR = 'mapcn';
 
 // map tiles style name, see MAP_TILE_STYLES for more details
-export const MAP_TILE_STYLE = 'dark-v10';
+export const MAP_TILE_STYLE_LIGHT = 'osm-bright';
+export const MAP_TILE_STYLE_DARK = 'dark-matter';
 
 // access token. you can apply a new one, it's free.
 // maptiler: Gt5R0jT8tuIYxW6sNrAg | sign up at https://cloud.maptiler.com/auth/widget
@@ -240,17 +278,80 @@ export const MAP_TILE_STYLES = {
       'https://api.maptiler.com/maps/winter-v2-dark/style.json?key=',
     hybrid: 'https://api.maptiler.com/maps/hybrid/style.json?key=',
   },
+
+  // https://docs.stadiamaps.com/themes/
   stadiamaps: {
+    // light
+    alidade_smooth:
+      'https://tiles.stadiamaps.com/styles/alidade_smooth.json?api_key=',
     alidade_smooth_dark:
       'https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json?api_key=',
     alidade_satellite:
       'https://tiles.stadiamaps.com/styles/alidade_satellite.json?api_key=',
   },
+
+  // https://docs.mapbox.com/api/maps/styles/
   mapbox: {
     'dark-v10': 'mapbox://styles/mapbox/dark-v10',
     'dark-v11': 'mapbox://styles/mapbox/dark-v11',
+    'light-v10': 'mapbox://styles/mapbox/light-v10',
+    'light-v11': 'mapbox://styles/mapbox/light-v11',
     'navigation-night': 'mapbox://styles/mapbox/navigation-night-v1',
     'satellite-streets-v12': 'mapbox://styles/mapbox/satellite-streets-v12',
   },
   default: 'mapbox://styles/mapbox/dark-v10',
 };
+
+export const getMapTileVendorStyles = (
+  vendor: string
+): Record<string, string> | undefined => {
+  const styles = MAP_TILE_STYLES[vendor as keyof typeof MAP_TILE_STYLES];
+  return typeof styles === 'object' ? styles : undefined;
+};
+
+// Configuration validation
+if (typeof window !== 'undefined') {
+  // Validate token requirements
+  if (MAP_TILE_VENDOR === 'mapcn' && MAP_TILE_ACCESS_TOKEN !== '') {
+    console.warn(
+      '⚠️ MapCN (Carto) does not require an access token.\n' +
+        '💡 You can set MAP_TILE_ACCESS_TOKEN = "" in src/utils/const.ts'
+    );
+  }
+
+  if (
+    ['mapbox', 'maptiler', 'stadiamaps'].includes(MAP_TILE_VENDOR) &&
+    MAP_TILE_ACCESS_TOKEN === ''
+  ) {
+    console.error(
+      `❌ ${MAP_TILE_VENDOR.toUpperCase()} requires an access token!\n` +
+        `💡 Please set MAP_TILE_ACCESS_TOKEN in src/utils/const.ts\n` +
+        `📚 See README.md for instructions on getting a token.\n` +
+        `\n` +
+        `💡 TIP: Use MAP_TILE_VENDOR = 'mapcn' for free (no token required)`
+    );
+  }
+
+  // Validate style matches vendor
+  const vendorStyles = getMapTileVendorStyles(MAP_TILE_VENDOR);
+  if (vendorStyles && !vendorStyles[MAP_TILE_STYLE_LIGHT]) {
+    console.error(
+      `❌ Style "${MAP_TILE_STYLE_LIGHT}" is not valid for vendor "${MAP_TILE_VENDOR}"\n` +
+        `💡 Available styles: ${Object.keys(vendorStyles).join(', ')}\n` +
+        `📚 Check src/utils/const.ts MAP_TILE_STYLES for valid combinations`
+    );
+  }
+
+  // Success message for correct MapCN configuration
+  if (
+    MAP_TILE_VENDOR === 'mapcn' &&
+    MAP_TILE_ACCESS_TOKEN === '' &&
+    vendorStyles?.[MAP_TILE_STYLE_LIGHT]
+  ) {
+    console.info(
+      '✅ Using MapCN (Carto Basemaps) - Free, no token required!\n' +
+        '📖 Attribution: Map tiles © CARTO, Map data © OpenStreetMap contributors\n' +
+        '📚 See docs/CARTO_TERMS.md for usage terms'
+    );
+  }
+}
