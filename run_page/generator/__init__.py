@@ -280,7 +280,7 @@ class Generator:
             if a.get("subtype") == "indoor":
                 db_activity = self.session.query(Activity).get(a["run_id"])
                 if db_activity:
-                    if db_activity.subtype != "indoor":
+                    if getattr(db_activity, 'subtype', '') != "indoor":
                         db_activity.subtype = "indoor"
                     poly = a.get("summary_polyline", "")
                     if poly and not db_activity.summary_polyline:
